@@ -36,6 +36,17 @@ class TestSettings(BaseSettings):
         default=None, description="OpenAI API key for embeddings (optional)"
     )
 
+    # GitLab Self-Hosted credentials (optional)
+    TEST_GITLAB_SELFHOSTED_INSTANCE_URL: Optional[str] = Field(
+        default=None, description="GitLab self-hosted instance URL (e.g., https://gitlab.company.com)"
+    )
+    TEST_GITLAB_SELFHOSTED_PAT: Optional[str] = Field(
+        default=None, description="GitLab self-hosted Personal Access Token"
+    )
+    TEST_GITLAB_SELFHOSTED_PROJECT_ID: Optional[str] = Field(
+        default=None, description="GitLab self-hosted project ID for testing (optional)"
+    )
+
     # OAuth test tokens
     TEST_NOTION_TOKEN: str = Field(description="Notion OAuth token for injection")
 
