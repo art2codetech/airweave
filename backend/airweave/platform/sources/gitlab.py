@@ -2,6 +2,7 @@
 
 import base64
 import mimetypes
+from abc import abstractmethod
 from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional
@@ -32,59 +33,35 @@ from airweave.platform.utils.file_extensions import (
 from airweave.schemas.source_connection import AuthenticationMethod, OAuthType
 
 
-@source(
-    name="GitLab",
-    short_name="gitlab",
-    auth_methods=[
-        AuthenticationMethod.OAUTH_BROWSER,
-        AuthenticationMethod.OAUTH_TOKEN,
-        AuthenticationMethod.AUTH_PROVIDER,
-    ],
-    oauth_type=OAuthType.WITH_REFRESH,
-    auth_config_class="GitLabAuthConfig",
-    config_class="GitLabConfig",
-    labels=["Code"],
-    supports_continuous=False,
-    supports_temporal_relevance=False,
-    rate_limit_level=RateLimitLevel.ORG,
-)
-class GitLabSource(BaseSource):
-    """GitLab source connector integrates with the GitLab REST API to extract data.
+class GitLabBaseSource(BaseSource):
+    """Base class for GitLab connectors (cloud and self-hosted).
 
-    Connects to your GitLab projects.
-
-    It supports syncing projects, users, repository files, issues, and merge requests
-    with configurable filtering options for branches and file types.
+    Provides shared implementation for:
+    - API request handling with authentication
+    - Entity generation (projects, files, issues, merge requests)
+    - Repository traversal with DFS
+    - Pagination logic
+    - Error handling
     """
 
-    BASE_URL = "https://gitlab.com/api/v4"
+    # Abstract properties - must be implemented by subclasses
+    @property
+    @abstractmethod
+    def base_url(self) -> str:
+        """Get the base API URL (e.g., https://gitlab.com/api/v4)."""
+        pass
 
-    @classmethod
-    async def create(
-        cls, access_token: str, config: Optional[Dict[str, Any]] = None
-    ) -> "GitLabSource":
-        """Create a new source instance with authentication.
+    @abstractmethod
+    async def get_access_token(self) -> Optional[str]:
+        """Get access token (OAuth token or PAT depending on implementation)."""
+        pass
 
-        Args:
-            access_token: OAuth access token for GitLab API
-            config: Optional source configuration parameters
+    @abstractmethod
+    async def _get_auth_headers(self) -> Dict[str, str]:
+        """Get authentication headers (Bearer token or PRIVATE-TOKEN)."""
+        pass
 
-        Returns:
-            Configured GitLab source instance
-        """
-        instance = cls()
-        instance.access_token = access_token
-
-        # Parse config fields
-        if config:
-            instance.project_id = config.get("project_id")
-            instance.branch = config.get("branch", "")
-        else:
-            instance.project_id = None
-            instance.branch = ""
-
-        return instance
-
+    # Shared implementation methods
     @retry(
         stop=stop_after_attempt(5),
         retry=retry_if_rate_limit_or_timeout,
@@ -94,7 +71,7 @@ class GitLabSource(BaseSource):
     async def _get_with_auth(
         self, client: httpx.AsyncClient, url: str, params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Make authenticated API request using OAuth access token.
+        """Make authenticated API request.
 
         Args:
             client: HTTP client
@@ -104,42 +81,10 @@ class GitLabSource(BaseSource):
         Returns:
             JSON response
         """
-        # Get a valid token (will refresh if needed)
-        access_token = await self.get_access_token()
-        if not access_token:
-            raise ValueError("No access token available")
-
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-        }
+        headers = await self._get_auth_headers()
 
         try:
             response = await client.get(url, headers=headers, params=params)
-
-            # Handle 401 Unauthorized - token might have expired
-            if response.status_code == 401:
-                self.logger.warning(f"Received 401 Unauthorized for {url}, refreshing token...")
-
-                if self.token_manager:
-                    try:
-                        # Force refresh the token
-                        from airweave.core.exceptions import TokenRefreshError
-
-                        new_token = await self.token_manager.refresh_on_unauthorized()
-                        headers = {"Authorization": f"Bearer {new_token}"}
-
-                        # Retry with new token
-                        self.logger.info(f"Retrying request with refreshed token: {url}")
-                        response = await client.get(url, headers=headers, params=params)
-
-                    except TokenRefreshError as e:
-                        self.logger.error(f"Failed to refresh token: {str(e)}")
-                        response.raise_for_status()
-                else:
-                    self.logger.error("No token manager available to refresh expired token")
-                    response.raise_for_status()
-
             response.raise_for_status()
             return response.json()
 
@@ -174,43 +119,10 @@ class GitLabSource(BaseSource):
 
         while True:
             params["page"] = page
-            token = await self.get_access_token()
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/json",
-            }
+            headers = await self._get_auth_headers()
 
             try:
                 response = await client.get(url, headers=headers, params=params)
-
-                # Handle 401 Unauthorized - token might have expired
-                if response.status_code == 401:
-                    self.logger.warning(f"Received 401 Unauthorized for {url}, refreshing token...")
-
-                    if self.token_manager:
-                        try:
-                            # Force refresh the token
-                            from airweave.core.exceptions import TokenRefreshError
-
-                            new_token = await self.token_manager.refresh_on_unauthorized()
-                            headers = {
-                                "Authorization": f"Bearer {new_token}",
-                                "Accept": "application/json",
-                            }
-
-                            # Retry with new token
-                            self.logger.info(
-                                f"Retrying paginated request with refreshed token: {url}"
-                            )
-                            response = await client.get(url, headers=headers, params=params)
-
-                        except TokenRefreshError as e:
-                            self.logger.error(f"Failed to refresh token: {str(e)}")
-                            response.raise_for_status()
-                    else:
-                        self.logger.error("No token manager available to refresh expired token")
-                        response.raise_for_status()
-
                 response.raise_for_status()
 
                 results = response.json()
@@ -255,7 +167,7 @@ class GitLabSource(BaseSource):
         Returns:
             User entity for the authenticated user
         """
-        url = f"{self.BASE_URL}/user"
+        url = f"{self.base_url}/user"
         user_data = await self._get_with_auth(client, url)
 
         return GitLabUserEntity(
@@ -294,7 +206,7 @@ class GitLabSource(BaseSource):
         Returns:
             Project entity
         """
-        url = f"{self.BASE_URL}/projects/{project_id}"
+        url = f"{self.base_url}/projects/{project_id}"
         project_data = await self._get_with_auth(client, url)
 
         return GitLabProjectEntity(
@@ -337,7 +249,7 @@ class GitLabSource(BaseSource):
         Yields:
             Issue entities
         """
-        url = f"{self.BASE_URL}/projects/{project_id}/issues"
+        url = f"{self.base_url}/projects/{project_id}/issues"
         issues = await self._get_paginated_results(client, url)
 
         for issue in issues:
@@ -382,7 +294,7 @@ class GitLabSource(BaseSource):
         Yields:
             Merge request entities
         """
-        url = f"{self.BASE_URL}/projects/{project_id}/merge_requests"
+        url = f"{self.base_url}/projects/{project_id}/merge_requests"
         merge_requests = await self._get_paginated_results(client, url)
 
         for mr in merge_requests:
@@ -484,7 +396,7 @@ class GitLabSource(BaseSource):
         processed_paths.add(path)
 
         # Get contents of the current directory
-        url = f"{self.BASE_URL}/projects/{project_id}/repository/tree"
+        url = f"{self.base_url}/projects/{project_id}/repository/tree"
         params = {"ref": branch, "path": path, "per_page": 100}
 
         try:
@@ -508,7 +420,7 @@ class GitLabSource(BaseSource):
                         path=item_path,
                         project_id=str(project_id),
                         project_path=project_path,
-                        url=f"https://gitlab.com/{project_path}/-/tree/{branch}/{item_path}",
+                        url=self._get_web_url(project_path, branch, item_path, is_blob=False),
                     )
 
                     # Create breadcrumb for this directory
@@ -542,6 +454,25 @@ class GitLabSource(BaseSource):
         except Exception as e:
             self.logger.error(f"Error traversing path {path}: {str(e)}")
 
+    def _get_web_url(self, project_path: str, branch: str, item_path: str, is_blob: bool) -> str:
+        """Get the web URL for a file or directory.
+
+        Args:
+            project_path: Project path with namespace
+            branch: Branch name
+            item_path: Path to the item
+            is_blob: True for files, False for directories
+
+        Returns:
+            Web URL
+        """
+        # For self-hosted, we need to use the instance URL
+        # For cloud, we use gitlab.com
+        # Extract base domain from base_url
+        base_domain = self.base_url.replace("/api/v4", "").replace("/api/v3", "")
+        blob_or_tree = "blob" if is_blob else "tree"
+        return f"{base_domain}/{project_path}/-/{blob_or_tree}/{branch}/{item_path}"
+
     async def _process_file(
         self,
         client: httpx.AsyncClient,
@@ -567,7 +498,7 @@ class GitLabSource(BaseSource):
         try:
             # Get file metadata first
             encoded_path = file_path.replace("/", "%2F")
-            url = f"{self.BASE_URL}/projects/{project_id}/repository/files/{encoded_path}"
+            url = f"{self.base_url}/projects/{project_id}/repository/files/{encoded_path}"
             params = {"ref": branch}
 
             file_data = await self._get_with_auth(client, url, params)
@@ -615,7 +546,7 @@ class GitLabSource(BaseSource):
                     created_at=None,  # GitLab files don't have creation timestamp
                     updated_at=None,  # GitLab files don't have update timestamp
                     # File fields
-                    url=f"https://gitlab.com/{project_path}/-/blob/{branch}/{file_path}",
+                    url=self._get_web_url(project_path, branch, file_path, is_blob=True),
                     size=file_size,
                     file_type=file_type,
                     mime_type=mime_type,
@@ -663,7 +594,7 @@ class GitLabSource(BaseSource):
             return [await self._get_project_info(client, self.project_id)]
 
         # All accessible projects
-        url = f"{self.BASE_URL}/projects"
+        url = f"{self.base_url}/projects"
         params = {"membership": True, "simple": False}
         projects_data = await self._get_paginated_results(client, url, params)
         projects = []
@@ -758,6 +689,83 @@ class GitLabSource(BaseSource):
                 async for entity in self._process_project(client, project, project_breadcrumbs):
                     yield entity
 
+
+@source(
+    name="GitLab",
+    short_name="gitlab",
+    auth_methods=[
+        AuthenticationMethod.OAUTH_BROWSER,
+        AuthenticationMethod.OAUTH_TOKEN,
+        AuthenticationMethod.AUTH_PROVIDER,
+    ],
+    oauth_type=OAuthType.WITH_REFRESH,
+    auth_config_class="GitLabAuthConfig",
+    config_class="GitLabConfig",
+    labels=["Code"],
+    supports_continuous=False,
+    supports_temporal_relevance=False,
+    rate_limit_level=RateLimitLevel.ORG,
+)
+class GitLabSource(GitLabBaseSource):
+    """GitLab cloud connector (gitlab.com).
+
+    Connects to GitLab.com using OAuth2 authentication to sync:
+    - Projects and repositories
+    - Code files with full content
+    - Issues and merge requests
+    - User information
+    """
+
+    BASE_URL = "https://gitlab.com/api/v4"
+
+    @classmethod
+    async def create(
+        cls, access_token: str, config: Optional[Dict[str, Any]] = None
+    ) -> "GitLabSource":
+        """Create a new source instance with authentication.
+
+        Args:
+            access_token: OAuth access token for GitLab API
+            config: Optional source configuration parameters
+
+        Returns:
+            Configured GitLab source instance
+        """
+        instance = cls()
+        instance.access_token = access_token
+
+        # Parse config fields
+        if config:
+            instance.project_id = config.get("project_id")
+            instance.branch = config.get("branch", "")
+        else:
+            instance.project_id = None
+            instance.branch = ""
+
+        return instance
+
+    @property
+    def base_url(self) -> str:
+        """Get the base API URL for GitLab cloud."""
+        return self.BASE_URL
+
+    async def get_access_token(self) -> Optional[str]:
+        """Get OAuth access token (handles refresh via token manager)."""
+        if self._token_manager:
+            return await self._token_manager.get_valid_token()
+        return getattr(self, "access_token", None)
+
+    async def _get_auth_headers(self) -> Dict[str, str]:
+        """Get OAuth authentication headers."""
+        access_token = await self.get_access_token()
+        if not access_token:
+            raise ValueError("No access token available")
+
+        return {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+
     async def validate(self) -> bool:
         """Verify GitLab OAuth token by pinging the /user endpoint."""
         return await self._validate_oauth2(
@@ -765,3 +773,130 @@ class GitLabSource(BaseSource):
             headers={"Accept": "application/json"},
             timeout=10.0,
         )
+
+
+@source(
+    name="GitLab (Self-Hosted)",
+    short_name="gitlab_selfhosted",
+    auth_methods=[AuthenticationMethod.DIRECT],
+    auth_config_class="GitLabSelfHostedAuthConfig",
+    config_class="GitLabSelfHostedConfig",
+    labels=["Code", "Self-Hosted"],
+    supports_continuous=False,
+    supports_temporal_relevance=False,
+    rate_limit_level=RateLimitLevel.ORG,
+)
+class GitLabSelfHostedSource(GitLabBaseSource):
+    """GitLab self-hosted connector for enterprise instances.
+
+    Connects to self-hosted GitLab instances using Personal Access Token (PAT) authentication.
+    Supports the same features as the cloud connector:
+    - Projects and repositories
+    - Code files with full content
+    - Issues and merge requests
+    - User information
+    """
+
+    @classmethod
+    async def create(
+        cls, personal_access_token: str, config: Optional[Dict[str, Any]] = None
+    ) -> "GitLabSelfHostedSource":
+        """Create a new GitLab self-hosted source.
+
+        Args:
+            personal_access_token: GitLab PAT with required scopes (api, read_api, read_user, read_repository)
+            config: Required configuration containing instance_url
+
+        Returns:
+            Configured GitLab self-hosted source instance
+        """
+        instance = cls()
+
+        if not personal_access_token:
+            raise ValueError("Personal access token is required")
+
+        instance.personal_access_token = personal_access_token
+        instance.auth_type = "direct"
+
+        # Get instance_url from config (required)
+        if not config or not config.get("instance_url"):
+            raise ValueError("instance_url is required for self-hosted GitLab")
+
+        instance.instance_url = cls._normalize_instance_url(config["instance_url"])
+        instance.project_id = config.get("project_id", "")
+        instance.branch = config.get("branch", "")
+
+        # Auto-detect API version
+        instance.api_version = await instance._detect_api_version()
+
+        return instance
+
+    @staticmethod
+    def _normalize_instance_url(url: str) -> str:
+        """Normalize instance URL to ensure it has protocol and no trailing slash.
+
+        Args:
+            url: Instance URL (with or without protocol)
+
+        Returns:
+            Normalized URL with protocol and no trailing slash
+        """
+        url = url.strip()
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+        return url.rstrip("/")
+
+    async def _detect_api_version(self) -> str:
+        """Auto-detect the GitLab API version supported by the instance.
+
+        Returns:
+            API version string (e.g., "v4")
+        """
+        # Try v4 first (current stable since GitLab 9.0+)
+        try:
+            async with self.http_client() as client:
+                test_url = f"{self.instance_url}/api/v4/version"
+                headers = {"PRIVATE-TOKEN": self.personal_access_token}
+                response = await client.get(test_url, headers=headers, timeout=10.0)
+                if response.status_code == 200:
+                    self.logger.info("Detected GitLab API v4")
+                    return "v4"
+        except Exception as e:
+            self.logger.warning(f"Could not detect API version: {e}")
+
+        # Default to v4 if detection fails (v4 is standard for all modern GitLab versions)
+        self.logger.info("Defaulting to GitLab API v4")
+        return "v4"
+
+    @property
+    def base_url(self) -> str:
+        """Get the base API URL for the self-hosted instance."""
+        api_version = getattr(self, "api_version", "v4")
+        return f"{self.instance_url}/api/{api_version}"
+
+    async def get_access_token(self) -> Optional[str]:
+        """Get PAT for authentication."""
+        return getattr(self, "personal_access_token", None)
+
+    async def _get_auth_headers(self) -> Dict[str, str]:
+        """Get PAT authentication headers."""
+        token = await self.get_access_token()
+        if not token:
+            raise ValueError("No personal access token available")
+
+        return {
+            "PRIVATE-TOKEN": token,
+            "Accept": "application/json",
+        }
+
+    async def validate(self) -> bool:
+        """Verify PAT by pinging the /user endpoint."""
+        try:
+            async with self.http_client() as client:
+                url = f"{self.base_url}/user"
+                headers = await self._get_auth_headers()
+                response = await client.get(url, headers=headers, timeout=10.0)
+                return response.status_code == 200
+        except Exception as e:
+            self.logger.error(f"GitLab self-hosted validation failed: {e}")
+            return False
