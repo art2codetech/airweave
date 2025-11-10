@@ -1,0 +1,321 @@
+---
+title: "GitLab (Self-Hosted)"
+description: "GitLab Self-Hosted integration with Airweave"
+---
+
+{/* AUTO-GENERATED CONTENT START */}
+
+
+
+<div className="connector-header" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+  <img src="icon.svg" alt="GitLab Self-Hosted logo" width="48" height="48" className="connector-icon" />
+  <h1 style={{ margin: 0 }}>GitLab (Self-Hosted)</h1>
+</div>
+
+## Configuration
+
+GitLab Self-Hosted connector integrates with your enterprise GitLab instance to extract data.
+
+Connects to self-hosted GitLab instances using Personal Access Token (PAT) authentication.
+Supports the same features as the cloud connector:
+- Projects and repositories
+- Code files with full content
+- Issues and merge requests
+- User information
+
+<Card
+  title="View Source Code"
+  icon="brands github"
+  href="https://github.com/airweave-ai/airweave/tree/main/backend/airweave/platform/sources/gitlab.py"
+>
+  Explore the GitLab Self-Hosted connector implementation
+</Card>
+
+### Authentication
+
+This connector uses **Personal Access Token (PAT) authentication**. This provides a simpler setup compared to OAuth, especially for self-hosted enterprise environments.
+
+**Required Token Scopes:**
+- `api` - Full API access (recommended)
+- OR `read_api` - Read-only API access (alternative to api)
+- `read_user` - Read user profile information
+- `read_repository` - Read repository contents
+
+**How to Create a Personal Access Token:**
+
+1. Log in to your GitLab instance
+2. Click your avatar in the top right, then **Settings**
+3. In the left sidebar, select **Access Tokens**
+4. Enter a name for the token (e.g., "Airweave Integration")
+5. Set an expiration date (optional - "No expiration" recommended for continuous sync)
+6. Select the required scopes:
+   - ✓ `api` (or `read_api`)
+   - ✓ `read_user`
+   - ✓ `read_repository`
+7. Click **Create personal access token**
+8. **Important:** Copy the token immediately - it will only be shown once!
+9. Use this token when configuring the Airweave connector
+
+<Note>
+  **Security Best Practice:** Store your Personal Access Token securely. Never commit it to version control or share it publicly. If compromised, revoke it immediately from your GitLab settings and generate a new one.
+</Note>
+
+### Configuration Options
+
+The following configuration options are available for this connector:
+
+<Card
+  title="Configuration Parameters"
+  className="config-card"
+  style={{ backgroundColor: 'rgba(0, 0, 0, 0.05)', padding: '16px', marginBottom: '24px' }}
+>
+
+GitLab Self-Hosted configuration schema.
+
+<ParamField
+  path="instance_url"
+  type="str"
+  required={true}
+>
+  Full URL to your GitLab instance (e.g., 'https://gitlab.company.com'). Include the protocol (https://) and domain.
+</ParamField>
+
+<ParamField
+  path="project_id"
+  type="str"
+  required={false}
+  default=""
+>
+  Specific project ID to sync (e.g., '12345'). If empty, syncs all accessible projects.
+</ParamField>
+
+<ParamField
+  path="branch"
+  type="str"
+  required={false}
+  default=""
+>
+  Specific branch to sync (e.g., 'main', 'master'). If empty, uses the default branch.
+</ParamField>
+</Card>
+
+### Features
+
+- **Auto-Detection:** Automatically detects GitLab API version (defaults to v4)
+- **Dynamic URL Support:** Works with any GitLab instance URL
+- **Same Data Models:** Identical entity types as cloud GitLab connector
+- **Flexible Filtering:** Filter by project ID and branch
+- **Full Repository Sync:** Depth-first traversal of repository structure
+- **Issue & MR Support:** Complete issue and merge request history
+
+### API Version Support
+
+This connector automatically detects the GitLab API version by checking the `/api/v4/version` endpoint. If detection fails, it defaults to API v4, which is supported by all modern GitLab versions (9.0+).
+
+### URL Format Examples
+
+**Valid instance URL formats:**
+- `https://gitlab.company.com`
+- `https://git.example.org`
+- `http://gitlab.internal:8080` (for internal networks)
+
+**The connector will:**
+- Add `https://` if no protocol is specified
+- Remove trailing slashes automatically
+- Construct API endpoints as `{instance_url}/api/{version}`
+
+## Data Models
+
+The following data models are available for this connector (identical to cloud GitLab):
+
+<Accordion title="GitLabProjectEntity">
+
+Schema for GitLab project (repository) entity.
+
+Reference:
+    https://docs.gitlab.com/ee/api/projects.html
+
+| Field | Type | Description |
+|-------|------|-------------|
+| path | str | Project path |
+| path_with_namespace | str | Full path with namespace |
+| description | Optional[str] | Project description |
+| default_branch | Optional[str] | Default branch of the repository |
+| visibility | str | Project visibility level |
+| topics | List[str] | Project topics/tags |
+| namespace | Dict[str, Any] | Project namespace information |
+| star_count | int | Number of stars |
+| forks_count | int | Number of forks |
+| open_issues_count | int | Number of open issues |
+| archived | bool | Whether the project is archived |
+| empty_repo | bool | Whether the repository is empty |
+| url | Optional[str] | Web URL to the project |
+
+</Accordion>
+
+<Accordion title="GitLabUserEntity">
+
+Schema for GitLab user entity.
+
+Reference:
+    https://docs.gitlab.com/ee/api/users.html
+
+| Field | Type | Description |
+|-------|------|-------------|
+| username | str | User's username |
+| state | str | User account state |
+| avatar_url | Optional[str] | User's avatar URL |
+| web_url | str | User's profile URL |
+| bio | Optional[str] | User's biography |
+| location | Optional[str] | User's location |
+| public_email | Optional[str] | User's public email |
+| organization | Optional[str] | User's organization |
+| job_title | Optional[str] | User's job title |
+| pronouns | Optional[str] | User's pronouns |
+
+</Accordion>
+
+<Accordion title="GitLabDirectoryEntity">
+
+Schema for GitLab directory entity.
+
+Reference:
+    https://docs.gitlab.com/ee/api/repositories.html
+
+| Field | Type | Description |
+|-------|------|-------------|
+| path | str | Path of the directory within the repository |
+| project_id | str | ID of the project containing this directory |
+| project_path | str | Path of the project |
+| url | Optional[str] | Web URL to the directory |
+
+</Accordion>
+
+<Accordion title="GitLabCodeFileEntity">
+
+Schema for GitLab code file entity.
+
+Reference:
+    https://docs.gitlab.com/ee/api/repository_files.html
+
+| Field | Type | Description |
+|-------|------|-------------|
+| blob_id | str | Blob ID of the file content |
+| project_id | str | ID of the project |
+| project_path | str | Path of the project |
+| line_count | Optional[int] | Number of lines in the file |
+
+</Accordion>
+
+<Accordion title="GitLabIssueEntity">
+
+Schema for GitLab issue entity.
+
+Reference:
+    https://docs.gitlab.com/ee/api/issues.html
+
+| Field | Type | Description |
+|-------|------|-------------|
+| title | str | Issue title |
+| description | Optional[str] | Issue description |
+| state | str | Issue state (opened, closed) |
+| closed_at | Optional[Any] | Issue close timestamp |
+| labels | List[str] | Issue labels |
+| author | Dict[str, Any] | Issue author information |
+| assignees | List[Dict[str, Any]] | Issue assignees |
+| milestone | Optional[Dict[str, Any]] | Issue milestone |
+| project_id | str | ID of the project |
+| iid | int | Internal issue ID |
+| web_url | str | Web URL to the issue |
+| user_notes_count | int | Number of user notes/comments |
+| upvotes | int | Number of upvotes |
+| downvotes | int | Number of downvotes |
+
+</Accordion>
+
+<Accordion title="GitLabMergeRequestEntity">
+
+Schema for GitLab merge request entity.
+
+Reference:
+    https://docs.gitlab.com/ee/api/merge_requests.html
+
+| Field | Type | Description |
+|-------|------|-------------|
+| title | str | Merge request title |
+| description | Optional[str] | Merge request description |
+| state | str | Merge request state (opened, closed, merged) |
+| merged_at | Optional[Any] | Merge request merge timestamp |
+| closed_at | Optional[Any] | Merge request close timestamp |
+| labels | List[str] | Merge request labels |
+| author | Dict[str, Any] | Merge request author information |
+| assignees | List[Dict[str, Any]] | Merge request assignees |
+| reviewers | List[Dict[str, Any]] | Merge request reviewers |
+| source_branch | str | Source branch name |
+| target_branch | str | Target branch name |
+| milestone | Optional[Dict[str, Any]] | Merge request milestone |
+| project_id | str | ID of the project |
+| iid | int | Internal merge request ID |
+| web_url | str | Web URL to the merge request |
+| merge_status | str | Merge status (can_be_merged, cannot_be_merged) |
+| draft | bool | Whether the merge request is a draft |
+| work_in_progress | bool | Whether the merge request is work in progress |
+| upvotes | int | Number of upvotes |
+| downvotes | int | Number of downvotes |
+| user_notes_count | int | Number of user notes/comments |
+
+</Accordion>
+
+## Troubleshooting
+
+### Connection Issues
+
+**Problem:** "Failed to connect to GitLab instance"
+- **Solution:** Verify your instance URL is accessible and includes the correct protocol (https://)
+- Check if your GitLab instance is behind a firewall or VPN
+
+**Problem:** "Authentication failed (401 Unauthorized)"
+- **Solution:** Verify your Personal Access Token is valid and hasn't expired
+- Check that the token has the required scopes: `api`, `read_user`, `read_repository`
+- Revoke and create a new token if needed
+
+**Problem:** "API version detection failed"
+- **Solution:** The connector will default to v4 (standard for GitLab 9.0+)
+- Verify your GitLab version is 9.0 or higher
+- Contact your GitLab administrator if using an older version
+
+### Permission Issues
+
+**Problem:** "No projects found"
+- **Solution:** Verify your user account has access to the projects you want to sync
+- Check project visibility settings (Private, Internal, Public)
+- Ask your GitLab administrator to grant you the appropriate project permissions
+
+**Problem:** "Cannot read repository files"
+- **Solution:** Ensure your token has the `read_repository` scope
+- Check that the repository is not empty
+- Verify the branch exists (use default branch if unsure)
+
+### Performance Tips
+
+- **Selective Sync:** Use the `project_id` parameter to sync only specific projects
+- **Branch Filtering:** Specify a `branch` to avoid syncing all branches
+- **Token Expiration:** Set tokens to "No expiration" for continuous syncing
+- **Rate Limits:** Self-hosted instances may have different rate limits - contact your administrator
+
+## Comparison with Cloud GitLab
+
+| Feature | Cloud GitLab | Self-Hosted GitLab |
+|---------|-------------|-------------------|
+| **Authentication** | OAuth 2.0 | Personal Access Token (PAT) |
+| **Target** | gitlab.com | Your enterprise instance |
+| **Setup Complexity** | OAuth flow | Simple token generation |
+| **Data Models** | 6 entity types | Same 6 entity types |
+| **Features** | Full feature set | Identical feature set |
+| **API Version** | Always latest (v4) | Auto-detected |
+
+Both connectors provide identical functionality - the only difference is the authentication method and target instance.
+
+
+
+{/* AUTO-GENERATED CONTENT END */}
