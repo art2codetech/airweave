@@ -497,6 +497,47 @@ class StripeConfig(SourceConfig):
     pass
 
 
+class RedmineConfig(SourceConfig):
+    """Redmine configuration schema."""
+
+    base_url: str = Field(
+        ...,
+        title="Redmine Instance URL",
+        description=(
+            "The base URL of your Redmine instance (e.g., 'https://redmine.example.com'). "
+            "Do not include trailing slash."
+        ),
+    )
+
+    project_identifiers: Optional[list[str]] = Field(
+        None,
+        title="Project Identifiers (Optional)",
+        description=(
+            "List of project identifiers to sync (e.g., 'my-project', 'dev-team'). "
+            "Leave empty to sync all accessible projects. "
+            "You can find project identifiers in your Redmine project settings."
+        ),
+    )
+
+    include_closed_issues: bool = Field(
+        False,
+        title="Include Closed Issues",
+        description="Include closed/resolved issues in sync. Default is open issues only.",
+    )
+
+    include_attachments: bool = Field(
+        False,
+        title="Download Attachments",
+        description="Download and index file attachments from issues and wiki pages.",
+    )
+
+    include_wiki_pages: bool = Field(
+        True,
+        title="Include Wiki Pages",
+        description="Sync wiki pages from projects.",
+    )
+
+
 class SalesforceConfig(SourceConfig):
     """Salesforce configuration schema."""
 

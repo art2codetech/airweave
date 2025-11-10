@@ -1,0 +1,12 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid">
+    <defs>
+        <linearGradient id="redmineGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#B32024;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#8B1519;stop-opacity:1" />
+        </linearGradient>
+    </defs>
+    <!-- Background square with rounded corners -->
+    <rect x="32" y="32" width="448" height="448" rx="64" ry="64" fill="url(#redmineGradient)"/>
+    <!-- Letter R -->
+    <path d="M 160 140 L 280 140 Q 360 140 360 220 Q 360 270 320 290 L 380 400 L 310 400 L 255 295 L 230 295 L 230 400 L 160 400 Z M 230 200 L 230 245 L 275 245 Q 295 245 295 222.5 Q 295 200 275 200 Z" fill="white"/>
+</svg>
