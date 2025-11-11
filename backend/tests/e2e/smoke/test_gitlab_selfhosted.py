@@ -23,7 +23,7 @@ class TestDirectAuthWithConfig:
     ):
         """Test creating a GitLab Self-Hosted connection with PAT and instance_url."""
         # Skip if credentials not available
-        if not hasattr(config, 'TEST_GITLAB_SELFHOSTED_PAT'):
+        if not config.TEST_GITLAB_SELFHOSTED_PAT or not config.TEST_GITLAB_SELFHOSTED_INSTANCE_URL:
             pytest.skip("GitLab Self-Hosted credentials not configured")
 
         payload = {
@@ -67,7 +67,7 @@ class TestDirectAuthWithConfig:
         self, api_client: httpx.AsyncClient, collection: Dict, config
     ):
         """Test that creating connection fails without required instance_url config."""
-        if not hasattr(config, 'TEST_GITLAB_SELFHOSTED_PAT'):
+        if not config.TEST_GITLAB_SELFHOSTED_PAT:
             pytest.skip("GitLab Self-Hosted credentials not configured")
 
         payload = {
@@ -98,7 +98,7 @@ class TestDirectAuthWithConfig:
         self, api_client: httpx.AsyncClient, collection: Dict, config
     ):
         """Test GitLab Self-Hosted with project_id config (selective sync)."""
-        if not hasattr(config, 'TEST_GITLAB_SELFHOSTED_PAT'):
+        if not config.TEST_GITLAB_SELFHOSTED_PAT or not config.TEST_GITLAB_SELFHOSTED_INSTANCE_URL:
             pytest.skip("GitLab Self-Hosted credentials not configured")
 
         payload = {
@@ -107,7 +107,7 @@ class TestDirectAuthWithConfig:
             "readable_collection_id": collection["readable_id"],
             "config": {
                 "instance_url": config.TEST_GITLAB_SELFHOSTED_INSTANCE_URL,
-                "project_id": getattr(config, 'TEST_GITLAB_SELFHOSTED_PROJECT_ID', ""),
+                "project_id": config.TEST_GITLAB_SELFHOSTED_PROJECT_ID or "",
                 "branch": "main",
             },
             "authentication": {
@@ -135,7 +135,7 @@ class TestDirectAuthWithConfig:
         self, api_client: httpx.AsyncClient, collection: Dict, config
     ):
         """Test creating connection with invalid PAT."""
-        if not hasattr(config, 'TEST_GITLAB_SELFHOSTED_INSTANCE_URL'):
+        if not config.TEST_GITLAB_SELFHOSTED_INSTANCE_URL:
             pytest.skip("GitLab Self-Hosted instance URL not configured")
 
         payload = {
@@ -165,7 +165,7 @@ class TestDirectAuthWithConfig:
         self, api_client: httpx.AsyncClient, collection: Dict, config
     ):
         """Test updating the instance_url config field."""
-        if not hasattr(config, 'TEST_GITLAB_SELFHOSTED_PAT'):
+        if not config.TEST_GITLAB_SELFHOSTED_PAT or not config.TEST_GITLAB_SELFHOSTED_INSTANCE_URL:
             pytest.skip("GitLab Self-Hosted credentials not configured")
 
         # Create connection
@@ -210,7 +210,7 @@ class TestDirectAuthWithConfig:
         self, api_client: httpx.AsyncClient, collection: Dict, config
     ):
         """Test that various instance_url formats are handled correctly."""
-        if not hasattr(config, 'TEST_GITLAB_SELFHOSTED_PAT'):
+        if not config.TEST_GITLAB_SELFHOSTED_PAT or not config.TEST_GITLAB_SELFHOSTED_INSTANCE_URL:
             pytest.skip("GitLab Self-Hosted credentials not configured")
 
         # Test with trailing slash - should be normalized
@@ -249,7 +249,7 @@ class TestDirectAuthWithConfig:
         """Test that sync completes successfully for GitLab Self-Hosted."""
         import asyncio
 
-        if not hasattr(config, 'TEST_GITLAB_SELFHOSTED_PAT'):
+        if not config.TEST_GITLAB_SELFHOSTED_PAT or not config.TEST_GITLAB_SELFHOSTED_INSTANCE_URL:
             pytest.skip("GitLab Self-Hosted credentials not configured")
 
         # Create connection and trigger sync
@@ -260,7 +260,7 @@ class TestDirectAuthWithConfig:
             "config": {
                 "instance_url": config.TEST_GITLAB_SELFHOSTED_INSTANCE_URL,
                 # Use specific project for faster testing if available
-                "project_id": getattr(config, 'TEST_GITLAB_SELFHOSTED_PROJECT_ID', ""),
+                "project_id": config.TEST_GITLAB_SELFHOSTED_PROJECT_ID or "",
             },
             "authentication": {
                 "credentials": {
