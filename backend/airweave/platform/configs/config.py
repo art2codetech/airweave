@@ -156,6 +156,33 @@ class GitLabConfig(SourceConfig):
     )
 
 
+class GitLabSelfHostedConfig(SourceConfig):
+    """GitLab Self-Hosted configuration schema."""
+
+    instance_url: str = Field(
+        ...,  # Required field
+        title="GitLab Instance URL",
+        description=(
+            "Full URL to your GitLab instance (e.g., 'https://gitlab.company.com'). "
+            "Include the protocol (https://) and domain."
+        ),
+    )
+    project_id: str = Field(
+        default="",
+        title="Project ID",
+        description=(
+            "Specific project ID to sync (e.g., '12345'). If empty, syncs all accessible projects."
+        ),
+    )
+    branch: str = Field(
+        default="",
+        title="Branch name",
+        description=(
+            "Specific branch to sync (e.g., 'main', 'master'). If empty, uses the default branch."
+        ),
+    )
+
+
 class GmailConfig(SourceConfig):
     """Gmail configuration schema."""
 
