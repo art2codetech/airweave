@@ -598,7 +598,6 @@ class GitLabBaseSource(BaseSource):
                     created_at=None,  # GitLab files don't have creation timestamp
                     updated_at=None,  # GitLab files don't have update timestamp
                     # File fields
-                    url=self._get_web_url(project_path, branch, file_path, is_blob=True),
                     size=file_size,
                     file_type=file_type,
                     mime_type=mime_type,
