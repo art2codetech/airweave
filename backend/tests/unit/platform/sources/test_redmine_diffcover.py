@@ -16,8 +16,15 @@ from airweave.platform.sources.redmine import RedmineSource
 
 
 @pytest.mark.asyncio
-async def test_validate_failure_returns_false(redmine_config):
+async def test_validate_failure_returns_false():
     """Regression: validate() must return False on invalid creds (not None)."""
+    redmine_config = {
+        "base_url": "https://redmine.example.com",
+        "project_identifiers": ["test-project"],
+        "include_closed_issues": False,
+        "include_attachments": False,
+        "include_wiki_pages": True,
+    }
     source = await RedmineSource.create(api_key="invalid-key", config=redmine_config)
 
     mock_response = MagicMock()
@@ -44,10 +51,15 @@ async def test_validate_failure_returns_false(redmine_config):
 
 
 @pytest.mark.asyncio
-async def test_generate_entities_exercises_optional_paths(
-    redmine_config_all_projects, mock_project_response
-):
+async def test_generate_entities_exercises_optional_paths(mock_project_response):
     """Exercise entity-generation paths with minimal mocked API calls."""
+    redmine_config_all_projects = {
+        "base_url": "https://redmine.example.com",
+        "project_identifiers": None,  # Sync all
+        "include_closed_issues": True,
+        "include_attachments": True,
+        "include_wiki_pages": True,
+    }
     source = await RedmineSource.create(api_key="test-key", config=redmine_config_all_projects)
 
     # Minimal issue response
