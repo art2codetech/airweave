@@ -785,3 +785,6 @@ class RedmineSource(BaseSource):
         except Exception as e:
             self.logger.error(f"❌ Redmine validation failed: {str(e)}")
             return False
+
+        # Defensive fallback: keep return type stable even if control-flow changes.
+        return False

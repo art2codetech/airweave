@@ -182,10 +182,14 @@ class RedmineJournalEntity(BaseEntity):
 
     # API fields
     journal_id: int = AirweaveField(
-        ..., description="Numeric ID of the journal entry.", embeddable=True, is_entity_id=True
+        ...,
+        description="Numeric ID of the journal entry.",
+        embeddable=True,
+        is_entity_id=True,
+        is_name=True,
     )
     notes: Optional[str] = AirweaveField(
-        None, description="Comment text of the journal entry.", embeddable=True, is_name=True
+        None, description="Comment text of the journal entry.", embeddable=True
     )
     issue_id: int = AirweaveField(
         ..., description="ID of the issue this journal belongs to.", embeddable=True
