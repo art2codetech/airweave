@@ -31,7 +31,10 @@ class RedmineProjectEntity(BaseEntity):
         ..., description="Numeric ID of the project.", embeddable=True, is_entity_id=True
     )
     identifier: str = AirweaveField(
-        ..., description="Unique identifier of the project (e.g., 'my-project').", embeddable=True
+        ...,
+        description="Unique identifier of the project (e.g., 'my-project').",
+        embeddable=True,
+        is_name=True,
     )
     description: Optional[str] = AirweaveField(
         None, description="Description of the project.", embeddable=True
@@ -68,7 +71,9 @@ class RedmineIssueEntity(BaseEntity):
     issue_id: int = AirweaveField(
         ..., description="Numeric ID of the issue.", embeddable=True, is_entity_id=True
     )
-    subject: str = AirweaveField(..., description="Subject/title of the issue.", embeddable=True)
+    subject: str = AirweaveField(
+        ..., description="Subject/title of the issue.", embeddable=True, is_name=True
+    )
     description: Optional[str] = AirweaveField(
         None, description="Detailed description of the issue.", embeddable=True
     )
@@ -131,7 +136,11 @@ class RedmineWikiPageEntity(BaseEntity):
 
     # API fields
     title: str = AirweaveField(
-        ..., description="Title of the wiki page.", embeddable=True, is_entity_id=True
+        ...,
+        description="Title of the wiki page.",
+        embeddable=True,
+        is_entity_id=True,
+        is_name=True,
     )
     text: str = AirweaveField(
         ...,
@@ -176,7 +185,7 @@ class RedmineJournalEntity(BaseEntity):
         ..., description="Numeric ID of the journal entry.", embeddable=True, is_entity_id=True
     )
     notes: Optional[str] = AirweaveField(
-        None, description="Comment text of the journal entry.", embeddable=True
+        None, description="Comment text of the journal entry.", embeddable=True, is_name=True
     )
     issue_id: int = AirweaveField(
         ..., description="ID of the issue this journal belongs to.", embeddable=True
@@ -206,7 +215,9 @@ class RedmineAttachmentEntity(BaseEntity):
     attachment_id: int = AirweaveField(
         ..., description="Numeric ID of the attachment.", embeddable=True, is_entity_id=True
     )
-    filename: str = AirweaveField(..., description="Name of the attached file.", embeddable=True)
+    filename: str = AirweaveField(
+        ..., description="Name of the attached file.", embeddable=True, is_name=True
+    )
     filesize: Optional[int] = AirweaveField(
         None, description="Size of the file in bytes.", embeddable=True
     )
