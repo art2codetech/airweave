@@ -438,6 +438,17 @@ class GitLabAuthConfig(OAuth2WithRefreshAuthConfig):
     # Inherits refresh_token and access_token from OAuth2WithRefreshAuthConfig
 
 
+class GitLabSelfHostedAuthConfig(AuthConfig):
+    """GitLab Self-Hosted authentication credentials schema using Personal Access Token."""
+
+    personal_access_token: str = Field(
+        title="Personal Access Token",
+        description=(
+            "GitLab personal access token with api, read_api, read_user, and read_repository scopes"
+        ),
+    )
+
+
 class HubspotAuthConfig(OAuth2WithRefreshAuthConfig):
     """Hubspot authentication credentials schema."""
 

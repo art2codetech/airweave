@@ -36,6 +36,17 @@ class TestSettings(BaseSettings):
         default=None, description="OpenAI API key for embeddings (optional)"
     )
 
+    # GitLab Self-Hosted credentials (optional)
+    TEST_GITLAB_SELFHOSTED_INSTANCE_URL: Optional[str] = Field(
+        default=None, description="GitLab self-hosted instance URL (e.g., https://gitlab.company.com)"
+    )
+    TEST_GITLAB_SELFHOSTED_PAT: Optional[str] = Field(
+        default=None, description="GitLab self-hosted Personal Access Token"
+    )
+    TEST_GITLAB_SELFHOSTED_PROJECT_ID: Optional[str] = Field(
+        default=None, description="GitLab self-hosted project ID for testing (optional)"
+    )
+
     # OAuth test tokens
     TEST_NOTION_TOKEN: str = Field(description="Notion OAuth token for injection")
 
@@ -165,7 +176,14 @@ class TestSettings(BaseSettings):
     @field_validator("TEST_STRIPE_API_KEY")
     @classmethod
     def validate_stripe_key(cls, v: str) -> str:
-        """Validate Stripe API key format."""
+        """Validate Stripe API key format.
+
+        In CI/forks, Stripe credentials may be intentionally unavailable.
+        In that case we allow an empty value and let Stripe-dependent tests
+        be skipped/fail gracefully elsewhere.
+        """
+        if not v:
+            return v
         if not v.startswith("sk_"):
             raise ValueError("Stripe API key must start with 'sk_'")
         if len(v) < 10:
