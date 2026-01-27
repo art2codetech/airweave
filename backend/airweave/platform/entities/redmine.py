@@ -27,9 +27,7 @@ class RedmineProjectEntity(BaseEntity):
     # - updated_at (from updated_on timestamp)
 
     # API fields
-    project_id: int = AirweaveField(
-        ..., description="Numeric ID of the project.", embeddable=True
-    )
+    project_id: int = AirweaveField(..., description="Numeric ID of the project.", embeddable=True)
     identifier: str = AirweaveField(
         ..., description="Unique identifier of the project (e.g., 'my-project').", embeddable=True
     )
@@ -65,12 +63,8 @@ class RedmineIssueEntity(BaseEntity):
     # - updated_at (from updated_on timestamp)
 
     # API fields
-    issue_id: int = AirweaveField(
-        ..., description="Numeric ID of the issue.", embeddable=True
-    )
-    subject: str = AirweaveField(
-        ..., description="Subject/title of the issue.", embeddable=True
-    )
+    issue_id: int = AirweaveField(..., description="Numeric ID of the issue.", embeddable=True)
+    subject: str = AirweaveField(..., description="Subject/title of the issue.", embeddable=True)
     description: Optional[str] = AirweaveField(
         None, description="Detailed description of the issue.", embeddable=True
     )
@@ -84,7 +78,9 @@ class RedmineIssueEntity(BaseEntity):
         None, description="Type of the issue (Bug, Feature, Support, etc.).", embeddable=True
     )
     status_name: Optional[str] = AirweaveField(
-        None, description="Current status of the issue (New, In Progress, Closed, etc.).", embeddable=True
+        None,
+        description="Current status of the issue (New, In Progress, Closed, etc.).",
+        embeddable=True,
     )
     priority_name: Optional[str] = AirweaveField(
         None, description="Priority level of the issue (Low, Normal, High, etc.).", embeddable=True
@@ -130,11 +126,11 @@ class RedmineWikiPageEntity(BaseEntity):
     # - updated_at (from updated_on timestamp)
 
     # API fields
-    title: str = AirweaveField(
-        ..., description="Title of the wiki page.", embeddable=True
-    )
+    title: str = AirweaveField(..., description="Title of the wiki page.", embeddable=True)
     text: str = AirweaveField(
-        ..., description="Content of the wiki page (in Textile or Markdown format).", embeddable=True
+        ...,
+        description="Content of the wiki page (in Textile or Markdown format).",
+        embeddable=True,
     )
     version: Optional[int] = AirweaveField(
         None, description="Version number of the wiki page.", embeddable=True
@@ -204,9 +200,7 @@ class RedmineAttachmentEntity(BaseEntity):
     attachment_id: int = AirweaveField(
         ..., description="Numeric ID of the attachment.", embeddable=True
     )
-    filename: str = AirweaveField(
-        ..., description="Name of the attached file.", embeddable=True
-    )
+    filename: str = AirweaveField(..., description="Name of the attached file.", embeddable=True)
     filesize: Optional[int] = AirweaveField(
         None, description="Size of the file in bytes.", embeddable=True
     )
@@ -223,5 +217,7 @@ class RedmineAttachmentEntity(BaseEntity):
         None, description="Name of the user who uploaded this attachment.", embeddable=True
     )
     issue_id: Optional[int] = AirweaveField(
-        None, description="ID of the issue this attachment belongs to (if applicable).", embeddable=True
+        None,
+        description="ID of the issue this attachment belongs to (if applicable).",
+        embeddable=True,
     )

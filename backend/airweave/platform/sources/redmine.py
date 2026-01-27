@@ -59,9 +59,7 @@ class RedmineSource(BaseSource):
     """
 
     @classmethod
-    async def create(
-        cls, api_key: str, config: Optional[Dict[str, Any]] = None
-    ) -> "RedmineSource":
+    async def create(cls, api_key: str, config: Optional[Dict[str, Any]] = None) -> "RedmineSource":
         """Create a new Redmine source instance.
 
         Args:
@@ -410,9 +408,7 @@ class RedmineSource(BaseSource):
             projects = data.get("projects", [])
             total_count = data.get("total_count", 0)
 
-            self.logger.info(
-                f"Retrieved {len(projects)} projects (total available: {total_count})"
-            )
+            self.logger.info(f"Retrieved {len(projects)} projects (total available: {total_count})")
 
             # Process each project
             for project_data in projects:
@@ -503,9 +499,7 @@ class RedmineSource(BaseSource):
             issues = data.get("issues", [])
             total_count = data.get("total_count", 0)
 
-            self.logger.info(
-                f"Retrieved {len(issues)} issues (total available: {total_count})"
-            )
+            self.logger.info(f"Retrieved {len(issues)} issues (total available: {total_count})")
 
             # Process each issue
             for issue_data in issues:
@@ -747,7 +741,9 @@ class RedmineSource(BaseSource):
                 user = data.get("user")
                 if user:
                     user_name = user.get("login", "unknown")
-                    self.logger.info(f"✅ Redmine validation successful. Authenticated as: {user_name}")
+                    self.logger.info(
+                        f"✅ Redmine validation successful. Authenticated as: {user_name}"
+                    )
                     return True
                 else:
                     self.logger.error("Redmine validation failed: No user data returned")
