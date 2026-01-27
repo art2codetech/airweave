@@ -5,6 +5,8 @@ exercise the code paths added in the self-hosted connector without
 needing a real GitLab instance.
 """
 
+# ruff: noqa: D101, D102, B017
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -13,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from airweave.platform.configs.config import GitLabSelfHostedConfig
-from airweave.platform.sources.gitlab import GitLabSelfHostedSource
+from airweave.platform.sources.gitlab import GitLabSelfHostedSource, GitLabSource
 
 
 class TestGitLabSelfHostedConfig:
@@ -53,7 +55,11 @@ class TestGitLabSelfHostedSource:
         ):
             src = await GitLabSelfHostedSource.create(
                 "pat",
-                config={"instance_url": "gitlab.example.com", "project_id": "123", "branch": "main"},
+                config={
+                    "instance_url": "gitlab.example.com",
+                    "project_id": "123",
+                    "branch": "main",
+                },
             )
 
         assert src.instance_url == "https://gitlab.example.com"
@@ -61,6 +67,13 @@ class TestGitLabSelfHostedSource:
 
         headers = await src._get_auth_headers()
         assert headers["PRIVATE-TOKEN"] == "pat"
+
+    @pytest.mark.asyncio
+    async def test_get_auth_headers_raises_without_token(self):
+        src = GitLabSelfHostedSource()
+        src.personal_access_token = None
+        with pytest.raises(ValueError):
+            await src._get_auth_headers()
 
     @pytest.mark.asyncio
     async def test_detect_api_version_success_and_fallback(self):
@@ -97,7 +110,7 @@ class TestGitLabSelfHostedSource:
         assert await src2._detect_api_version() == "v4"
 
     @pytest.mark.asyncio
-    async def test_validate_true_false(self):
+    async def test_validate_true_false_and_exception_path(self):
         src = GitLabSelfHostedSource()
         src.personal_access_token = "pat"
         src.instance_url = "https://gitlab.example.com"
@@ -118,8 +131,63 @@ class TestGitLabSelfHostedSource:
             client.get = AsyncMock(return_value=bad_response)
             yield client
 
+        @asynccontextmanager
+        async def exploding_client():
+            client = MagicMock()
+            client.get = AsyncMock(side_effect=RuntimeError("boom"))
+            yield client
+
         src.http_client = ok_client  # type: ignore[assignment]
         assert await src.validate() is True
 
         src.http_client = bad_client  # type: ignore[assignment]
         assert await src.validate() is False
+
+        src.http_client = exploding_client  # type: ignore[assignment]
+        assert await src.validate() is False
+
+    @pytest.mark.asyncio
+    async def test_get_web_url_uses_instance_domain(self):
+        src = GitLabSelfHostedSource()
+        src.instance_url = "https://gitlab.example.com"
+        src.api_version = "v4"
+        src.personal_access_token = "pat"
+
+        url = src._get_web_url(
+            project_path="acme/thing",
+            branch="main",
+            item_path="src/app.py",
+            is_blob=True,
+        )
+        assert url.startswith("https://gitlab.example.com/")
+        assert "/-/blob/main/src/app.py" in url
+
+
+class TestGitLabCloudConnectorPaths:
+    @pytest.mark.asyncio
+    async def test_cloud_create_with_and_without_config(self):
+        src = await GitLabSource.create("tok", config={"project_id": "1", "branch": "main"})
+        assert src.project_id == "1"
+        assert src.branch == "main"
+
+        src2 = await GitLabSource.create("tok")
+        assert src2.project_id is None
+        assert src2.branch == ""
+
+    @pytest.mark.asyncio
+    async def test_cloud_get_access_token_via_token_manager_and_headers(self):
+        src = GitLabSource()
+        src._token_manager = MagicMock()
+        src._token_manager.get_valid_token = AsyncMock(return_value="newtok")
+
+        assert await src.get_access_token() == "newtok"
+        headers = await src._get_auth_headers()
+        assert headers["Authorization"] == "Bearer newtok"
+
+    @pytest.mark.asyncio
+    async def test_cloud_get_auth_headers_raises_without_token(self):
+        src = GitLabSource()
+        src.access_token = None
+        src._token_manager = None
+        with pytest.raises(ValueError):
+            await src._get_auth_headers()
