@@ -176,7 +176,14 @@ class TestSettings(BaseSettings):
     @field_validator("TEST_STRIPE_API_KEY")
     @classmethod
     def validate_stripe_key(cls, v: str) -> str:
-        """Validate Stripe API key format."""
+        """Validate Stripe API key format.
+
+        In CI/forks, Stripe credentials may be intentionally unavailable.
+        In that case we allow an empty value and let Stripe-dependent tests
+        be skipped/fail gracefully elsewhere.
+        """
+        if not v:
+            return v
         if not v.startswith("sk_"):
             raise ValueError("Stripe API key must start with 'sk_'")
         if len(v) < 10:
