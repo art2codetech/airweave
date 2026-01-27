@@ -204,7 +204,13 @@ class RedmineSource(BaseSource):
         return RedmineIssueEntity(
             # Base fields
             entity_id=entity_id,
-            breadcrumbs=[Breadcrumb(entity_id=project.entity_id)],
+            breadcrumbs=[
+                Breadcrumb(
+                    entity_id=project.entity_id,
+                    name=project.name,
+                    entity_type=project.__class__.__name__,
+                )
+            ],
             name=issue_data.get("subject") or f"Issue #{issue_data['id']}",
             created_at=issue_data.get("created_on"),
             updated_at=issue_data.get("updated_on"),
@@ -257,7 +263,13 @@ class RedmineSource(BaseSource):
         return RedmineWikiPageEntity(
             # Base fields
             entity_id=entity_id,
-            breadcrumbs=[Breadcrumb(entity_id=project_entity_id)],
+            breadcrumbs=[
+                Breadcrumb(
+                    entity_id=project_entity_id,
+                    name=project_name,
+                    entity_type=RedmineProjectEntity.__name__,
+                )
+            ],
             name=title,
             created_at=wiki_data.get("created_on"),
             updated_at=wiki_data.get("updated_on"),
@@ -304,7 +316,13 @@ class RedmineSource(BaseSource):
         return RedmineJournalEntity(
             # Base fields
             entity_id=entity_id,
-            breadcrumbs=[Breadcrumb(entity_id=issue_entity_id)],
+            breadcrumbs=[
+                Breadcrumb(
+                    entity_id=issue_entity_id,
+                    name=f"Issue #{issue_id}",
+                    entity_type=RedmineIssueEntity.__name__,
+                )
+            ],
             name=name,
             created_at=journal_data.get("created_on"),
             updated_at=None,  # Journals don't update
@@ -342,7 +360,13 @@ class RedmineSource(BaseSource):
         return RedmineAttachmentEntity(
             # Base fields
             entity_id=entity_id,
-            breadcrumbs=[Breadcrumb(entity_id=issue_entity_id)],
+            breadcrumbs=[
+                Breadcrumb(
+                    entity_id=issue_entity_id,
+                    name=f"Issue #{issue_id}",
+                    entity_type=RedmineIssueEntity.__name__,
+                )
+            ],
             name=filename,
             created_at=attachment_data.get("created_on"),
             updated_at=None,  # Attachments don't update

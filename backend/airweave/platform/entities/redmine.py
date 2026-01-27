@@ -27,7 +27,9 @@ class RedmineProjectEntity(BaseEntity):
     # - updated_at (from updated_on timestamp)
 
     # API fields
-    project_id: int = AirweaveField(..., description="Numeric ID of the project.", embeddable=True)
+    project_id: int = AirweaveField(
+        ..., description="Numeric ID of the project.", embeddable=True, is_entity_id=True
+    )
     identifier: str = AirweaveField(
         ..., description="Unique identifier of the project (e.g., 'my-project').", embeddable=True
     )
@@ -63,7 +65,9 @@ class RedmineIssueEntity(BaseEntity):
     # - updated_at (from updated_on timestamp)
 
     # API fields
-    issue_id: int = AirweaveField(..., description="Numeric ID of the issue.", embeddable=True)
+    issue_id: int = AirweaveField(
+        ..., description="Numeric ID of the issue.", embeddable=True, is_entity_id=True
+    )
     subject: str = AirweaveField(..., description="Subject/title of the issue.", embeddable=True)
     description: Optional[str] = AirweaveField(
         None, description="Detailed description of the issue.", embeddable=True
@@ -126,7 +130,9 @@ class RedmineWikiPageEntity(BaseEntity):
     # - updated_at (from updated_on timestamp)
 
     # API fields
-    title: str = AirweaveField(..., description="Title of the wiki page.", embeddable=True)
+    title: str = AirweaveField(
+        ..., description="Title of the wiki page.", embeddable=True, is_entity_id=True
+    )
     text: str = AirweaveField(
         ...,
         description="Content of the wiki page (in Textile or Markdown format).",
@@ -167,7 +173,7 @@ class RedmineJournalEntity(BaseEntity):
 
     # API fields
     journal_id: int = AirweaveField(
-        ..., description="Numeric ID of the journal entry.", embeddable=True
+        ..., description="Numeric ID of the journal entry.", embeddable=True, is_entity_id=True
     )
     notes: Optional[str] = AirweaveField(
         None, description="Comment text of the journal entry.", embeddable=True
@@ -198,7 +204,7 @@ class RedmineAttachmentEntity(BaseEntity):
 
     # API fields
     attachment_id: int = AirweaveField(
-        ..., description="Numeric ID of the attachment.", embeddable=True
+        ..., description="Numeric ID of the attachment.", embeddable=True, is_entity_id=True
     )
     filename: str = AirweaveField(..., description="Name of the attached file.", embeddable=True)
     filesize: Optional[int] = AirweaveField(
