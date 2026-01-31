@@ -525,6 +525,24 @@ class PipedriveAuthConfig(AuthConfig):
         return v.strip()
 
 
+class RedmineAuthConfig(APIKeyAuthConfig):
+    """Redmine authentication credentials schema."""
+
+    api_key: str = Field(
+        title="API Key",
+        description="Redmine API key for the user.",
+        min_length=10,
+    )
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, v: str) -> str:
+        """Validate Redmine API key."""
+        if not v or not v.strip():
+            raise ValueError("API key is required")
+        return v.strip()
+
+
 class ExcelAuthConfig(OAuth2WithRefreshAuthConfig):
     """Microsoft Excel authentication credentials schema."""
 

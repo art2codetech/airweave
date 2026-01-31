@@ -316,6 +316,29 @@ class JiraConfig(SourceConfig):
     )
 
 
+class RedmineConfig(SourceConfig):
+    """Redmine configuration schema."""
+
+    base_url: str = Field(
+        default="https://redmine.example.com",
+        title="Redmine Base URL",
+        description="Base URL of your Redmine instance (e.g., 'https://redmine.company.com').",
+    )
+    project_identifier: str = Field(
+        default="",
+        title="Project Identifier",
+        description=(
+            "Optional project identifier (slug) to sync only one project. "
+            "Leave empty to sync all accessible projects."
+        ),
+    )
+    include_closed: bool = Field(
+        default=False,
+        title="Include Closed Issues",
+        description="Include closed issues in sync.",
+    )
+
+
 class LinearConfig(SourceConfig):
     """Linear configuration schema."""
 
