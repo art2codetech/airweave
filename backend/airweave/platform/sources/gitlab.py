@@ -58,7 +58,8 @@ class GitLabSource(BaseSource):
     with configurable filtering options for branches and file types.
     """
 
-    BASE_URL = "https://gitlab.com/api/v4"
+    DEFAULT_INSTANCE_URL = "https://gitlab.com"
+    API_PATH = "/api/v4"
 
     @staticmethod
     def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -95,9 +96,19 @@ class GitLabSource(BaseSource):
         if config:
             instance.project_id = config.get("project_id")
             instance.branch = config.get("branch", "")
+            base_url = config.get("base_url") or cls.DEFAULT_INSTANCE_URL
         else:
             instance.project_id = None
             instance.branch = ""
+            base_url = cls.DEFAULT_INSTANCE_URL
+
+        base_url = base_url.strip().rstrip("/")
+        if base_url.endswith(cls.API_PATH):
+            instance.api_base_url = base_url
+            instance.instance_url = base_url[: -len(cls.API_PATH)]
+        else:
+            instance.instance_url = base_url
+            instance.api_base_url = f"{base_url}{cls.API_PATH}"
 
         return instance
 
@@ -271,7 +282,7 @@ class GitLabSource(BaseSource):
         Returns:
             User entity for the authenticated user
         """
-        url = f"{self.BASE_URL}/user"
+        url = f"{self.api_base_url}/user"
         user_data = await self._get_with_auth(client, url)
 
         return GitLabUserEntity(
@@ -303,7 +314,7 @@ class GitLabSource(BaseSource):
         Returns:
             Project entity
         """
-        url = f"{self.BASE_URL}/projects/{project_id}"
+        url = f"{self.api_base_url}/projects/{project_id}"
         project_data = await self._get_with_auth(client, url)
 
         return GitLabProjectEntity(
@@ -345,7 +356,7 @@ class GitLabSource(BaseSource):
         Yields:
             Issue entities
         """
-        url = f"{self.BASE_URL}/projects/{project_id}/issues"
+        url = f"{self.api_base_url}/projects/{project_id}/issues"
         issues = await self._get_paginated_results(client, url)
 
         for issue in issues:
@@ -386,7 +397,7 @@ class GitLabSource(BaseSource):
         Yields:
             Merge request entities
         """
-        url = f"{self.BASE_URL}/projects/{project_id}/merge_requests"
+        url = f"{self.api_base_url}/projects/{project_id}/merge_requests"
         merge_requests = await self._get_paginated_results(client, url)
 
         for mr in merge_requests:
@@ -480,7 +491,7 @@ class GitLabSource(BaseSource):
         processed_paths.add(path)
 
         # Get contents of the current directory
-        url = f"{self.BASE_URL}/projects/{project_id}/repository/tree"
+        url = f"{self.api_base_url}/projects/{project_id}/repository/tree"
         params = {"ref": branch, "path": path, "per_page": 100}
 
         try:
@@ -501,7 +512,7 @@ class GitLabSource(BaseSource):
                         project_id=str(project_id),
                         project_path=project_path,
                         branch=branch,
-                        web_url_value=f"https://gitlab.com/{project_path}/-/tree/{branch}/{item_path}",
+                        web_url_value=f"{self.instance_url}/{project_path}/-/tree/{branch}/{item_path}",
                     )
 
                     # Create breadcrumb for this directory
@@ -564,7 +575,7 @@ class GitLabSource(BaseSource):
         try:
             # Get file metadata first
             encoded_path = file_path.replace("/", "%2F")
-            url = f"{self.BASE_URL}/projects/{project_id}/repository/files/{encoded_path}"
+            url = f"{self.api_base_url}/projects/{project_id}/repository/files/{encoded_path}"
             params = {"ref": branch}
 
             file_data = await self._get_with_auth(client, url, params)
@@ -609,7 +620,7 @@ class GitLabSource(BaseSource):
                     full_path=f"{project_id}/{file_path}",
                     name=file_name,
                     branch=branch,
-                    url=f"https://gitlab.com/{project_path}/-/raw/{branch}/{file_path}",
+                    url=f"{self.instance_url}/{project_path}/-/raw/{branch}/{file_path}",
                     size=file_size,
                     file_type=file_type,
                     mime_type=mime_type,
@@ -625,7 +636,7 @@ class GitLabSource(BaseSource):
                     project_id=str(project_id),
                     project_path=project_path,
                     line_count=line_count,
-                    web_url_value=f"https://gitlab.com/{project_path}/-/blob/{branch}/{file_path}",
+                    web_url_value=f"{self.instance_url}/{project_path}/-/blob/{branch}/{file_path}",
                 )
 
                 # Write content to disk for uniform file handling
@@ -662,7 +673,7 @@ class GitLabSource(BaseSource):
             return [await self._get_project_info(client, self.project_id)]
 
         # All accessible projects
-        url = f"{self.BASE_URL}/projects"
+        url = f"{self.api_base_url}/projects"
         params = {"membership": True, "simple": False}
         projects_data = await self._get_paginated_results(client, url, params)
         projects = []
@@ -764,7 +775,7 @@ class GitLabSource(BaseSource):
     async def validate(self) -> bool:
         """Verify GitLab OAuth token by pinging the /user endpoint."""
         return await self._validate_oauth2(
-            ping_url=f"{self.BASE_URL}/user",
+            ping_url=f"{self.api_base_url}/user",
             headers={"Accept": "application/json"},
             timeout=10.0,
         )

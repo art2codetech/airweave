@@ -140,6 +140,14 @@ class GitHubConfig(SourceConfig):
 class GitLabConfig(SourceConfig):
     """GitLab configuration schema."""
 
+    base_url: str = Field(
+        default="https://gitlab.com",
+        title="GitLab Base URL",
+        description=(
+            "Base URL of your GitLab instance (e.g., 'https://gitlab.com' or "
+            "'https://gitlab.company.com')."
+        ),
+    )
     project_id: str = Field(
         default="",
         title="Project ID",
