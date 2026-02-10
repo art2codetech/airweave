@@ -127,14 +127,14 @@ class Settings(BaseSettings):
     TEXT2VEC_INFERENCE_URL: str = "http://localhost:9878"
 
     # Embedding configuration (source of truth for entire stack)
-    # Must match: provider model, Vespa schema, Qdrant collection
+    # Must match: provider model dimensions and Vespa schema
     # Common values: 384 (local), 1024 (Mistral), 1536 (OpenAI small), 3072 (OpenAI large)
     EMBEDDING_DIMENSIONS: int = 1536
 
     # Vespa configuration
     VESPA_URL: str = "http://localhost"
     VESPA_PORT: int = 8081
-    VESPA_TIMEOUT: float = 120.0
+    VESPA_TIMEOUT: float = 60.0
     VESPA_CLUSTER: str = "airweave"  # Vespa content cluster name for bulk operations
 
     # -------------------------------------------------------------------------

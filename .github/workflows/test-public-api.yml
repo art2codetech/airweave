@@ -1,15 +1,49 @@
 name: Public API Test
 
 on:
-  pull_request_target:
+  pull_request:
     branches: [main]
   push:
     branches: [main]
 
 jobs:
+  # ───────────────────────────────────────────────────────────────────
+  # Build: compile the backend Docker image once, share via artifact
+  # ───────────────────────────────────────────────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Build test backend image
+        run: |
+          echo "Building backend image for testing..."
+          docker build -t test-backend:latest ./backend
+
+      - name: Export backend image
+        run: docker save test-backend:latest | gzip > /tmp/test-backend-image.tar.gz
+
+      - name: Upload backend image
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-backend-image
+          path: /tmp/test-backend-image.tar.gz
+          retention-days: 1
+
+  # ───────────────────────────────────────────────────────────────────
+  # Test: 5 parallel runners, each with its own Docker Compose stack
+  # ───────────────────────────────────────────────────────────────────
   test-public-api:
+    needs: build
     runs-on: ubuntu-latest
     environment: dev
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [0, 1, 2, 3, 4]
 
     steps:
       - name: Verify prerequisites
@@ -35,13 +69,17 @@ jobs:
           cd backend
           pip install -r tests/e2e/requirements.txt
 
-      - name: Setup Docker layer caching
-        uses: actions/cache@v3
+      - name: Download backend image
+        uses: actions/download-artifact@v4
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-docker-${{ hashFiles('docker/docker-compose.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-docker-
+          name: test-backend-image
+          path: /tmp
+
+      - name: Load backend image
+        run: |
+          echo "Loading pre-built backend image..."
+          docker load < /tmp/test-backend-image.tar.gz
+          docker images test-backend
 
       - name: Pre-pull heavy Docker images
         run: |
@@ -57,11 +95,6 @@ jobs:
           docker pull alpine:3.19 &
           wait
           echo "All images pre-pulled successfully"
-
-      - name: Build test backend image locally
-        run: |
-          echo "Building backend image for testing..."
-          docker build -t test-backend:latest ./backend
 
       - name: Setup environment and start services
         env:
@@ -154,7 +187,7 @@ jobs:
           echo ""
           echo "Embedding configuration verification complete!"
 
-      - name: Run E2E Smoke Tests
+      - name: Run E2E Smoke Tests (group ${{ matrix.group }})
         env:
           TEST_ENV: local
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -202,30 +235,61 @@ jobs:
           BACKEND_IMAGE: test-backend:latest
         run: |
           cd backend
-          # Exclude api_rate_limit tests (general API rate limiter) from CI
-          # Source rate_limit tests run sequentially after other tests for proper Redis isolation
-          # To run only rate limit tests locally: pytest tests/e2e/smoke -m rate_limit
 
+          # ── Dynamically discover and split test files ──
+          # All matrix jobs see the same file list. We shuffle deterministically
+          # using the commit SHA so each run gets a different (but reproducible)
+          # distribution, and each job picks its own slice via round-robin.
+          COMMIT_SHA="${GITHUB_SHA:-$(date +%Y%m%d)}"
+          GROUP=${{ matrix.group }}
+          TOTAL_GROUPS=5
+
+          # Collect all smoke test files (excluding rate-limit-only files)
+          ALL_FILES=$(find tests/e2e/smoke -maxdepth 1 -name 'test_*.py' \
+            ! -name 'test_rate_limiting.py' \
+            ! -name 'test_source_rate_limiting.py' \
+            | sort)
+
+          # Shuffle deterministically: hash each filename with the commit SHA,
+          # sort by hash, then strip the hash prefix
+          SHUFFLED=$(echo "$ALL_FILES" | while read -r f; do
+            hash=$(echo "${f}${COMMIT_SHA}" | md5sum | cut -c1-8)
+            echo "$hash $f"
+          done | sort | awk '{print $2}')
+
+          TOTAL=$(echo "$SHUFFLED" | wc -l)
+
+          # Round-robin: file at position i goes to group (i % TOTAL_GROUPS)
+          TEST_FILES=$(echo "$SHUFFLED" | awk -v g="$GROUP" -v tg="$TOTAL_GROUPS" '(NR - 1) % tg == g {print}' | tr '\n' ' ')
+
+          FILE_COUNT=$(echo "$TEST_FILES" | wc -w)
+          echo "=========================================="
+          echo "Group $GROUP of $TOTAL_GROUPS: running $FILE_COUNT / $TOTAL test files"
+          echo "=========================================="
+          echo "$TEST_FILES" | tr ' ' '\n' | grep -v '^$'
+          echo "=========================================="
+
+          WORKERS=2
           MAX_RETRIES=2
 
-          # Run all non-rate-limit tests in parallel first
+          # Run tests for this group
           set +e
-          pytest tests/e2e/smoke -m "not rate_limit and not api_rate_limit" -n 3 -v --tb=short 2>&1 | tee pytest_output.txt
+          pytest $TEST_FILES -m "not rate_limit and not api_rate_limit" -n $WORKERS -v --tb=short 2>&1 | tee pytest_output.txt
           EXIT_CODE=${PIPESTATUS[0]}
           set -e
 
           if [ $EXIT_CODE -eq 0 ]; then
-            echo "All tests passed!"
+            echo "All tests passed! (group $GROUP)"
             exit 0
           fi
 
           # Count failures from pytest output
           FAILURES=$(grep -oP '\d+(?= failed)' pytest_output.txt | head -1 || echo "0")
-          echo "Detected $FAILURES test failure(s)"
+          echo "Detected $FAILURES test failure(s) in group $GROUP"
 
-          # If 3 or more failures, don't retry
-          if [ "$FAILURES" -ge 5 ]; then
-            echo "5 or more tests failed. Not retrying."
+          # If too many failures, don't retry (likely a real issue, not flakiness)
+          if [ "$FAILURES" -ge 4 ]; then
+            echo "4 or more tests failed in group $GROUP. Not retrying."
             exit 1
           fi
 
@@ -234,17 +298,17 @@ jobs:
           while [ $ATTEMPT -le $MAX_RETRIES ]; do
             echo ""
             echo "=========================================="
-            echo "Retry attempt $ATTEMPT of $MAX_RETRIES (running ONLY failed tests)"
+            echo "Retry attempt $ATTEMPT of $MAX_RETRIES (group $GROUP, ONLY failed tests)"
             echo "=========================================="
             sleep 10
 
             set +e
-            pytest tests/e2e/smoke -m "not rate_limit" --lf -n 3 -v --tb=short 2>&1 | tee pytest_retry_output.txt
+            pytest $TEST_FILES -m "not rate_limit and not api_rate_limit" --lf -n $WORKERS -v --tb=short 2>&1 | tee pytest_retry_output.txt
             EXIT_CODE=${PIPESTATUS[0]}
             set -e
 
             if [ $EXIT_CODE -eq 0 ]; then
-              echo "Failed tests passed on retry!"
+              echo "Failed tests passed on retry! (group $GROUP)"
               exit 0
             fi
 
@@ -252,7 +316,7 @@ jobs:
           done
 
           # If we get here, tests failed after retries
-          echo "Tests failed after $MAX_RETRIES retry attempts"
+          echo "Tests in group $GROUP failed after $MAX_RETRIES retry attempts"
           exit 1
 
       - name: Run Source Rate Limit Tests (Sequential)
@@ -297,25 +361,48 @@ jobs:
           echo "Running source rate limit tests sequentially (no parallelization for Redis isolation)..."
           pytest tests/e2e/smoke -m rate_limit -v --tb=short
 
-      - name: Print service logs on failure
+      - name: Print service logs on failure (group ${{ matrix.group }})
         if: failure()
         run: |
           echo "=========================================="
-          echo "FASTAPI SERVER LOGS (last 200 lines)"
+          echo "FAILED GROUP: ${{ matrix.group }}"
           echo "=========================================="
-          docker logs airweave-backend --tail 200 2>&1 || echo "Could not fetch backend logs"
 
           echo ""
           echo "=========================================="
-          echo "TEMPORAL WORKER LOGS (last 800 lines)"
+          echo "CONTAINER STATUS"
           echo "=========================================="
-          docker logs airweave-temporal-worker --tail 800 2>&1 || echo "Could not fetch worker logs"
+          docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
           echo ""
           echo "=========================================="
-          echo "All running containers:"
+          echo "SVIX SERVER LOGS (last 400 lines)"
           echo "=========================================="
-          docker ps
+          docker logs airweave-svix --tail 400 2>&1 || echo "Could not fetch Svix logs"
+
+          echo ""
+          echo "=========================================="
+          echo "FASTAPI SERVER LOGS (last 1000 lines)"
+          echo "=========================================="
+          docker logs airweave-backend --tail 1000 2>&1 || echo "Could not fetch backend logs"
+
+          echo ""
+          echo "=========================================="
+          echo "TEMPORAL WORKER LOGS (last 2000 lines)"
+          echo "=========================================="
+          docker logs airweave-temporal-worker --tail 2000 2>&1 || echo "Could not fetch worker logs"
+
+          echo ""
+          echo "=========================================="
+          echo "ERROR / WARNING LINES (worker, last 200 lines)"
+          echo "=========================================="
+          docker logs airweave-temporal-worker 2>&1 | grep -iE "ERROR|WARNING|WARN|exception|traceback" | tail -200 || echo "No error/warning lines found"
+
+          echo ""
+          echo "=========================================="
+          echo "ERROR / WARNING LINES (backend, last 200 lines)"
+          echo "=========================================="
+          docker logs airweave-backend 2>&1 | grep -iE "ERROR|WARNING|WARN|exception|traceback" | tail -200 || echo "No error/warning lines found"
 
       - name: Cleanup Docker containers
         if: always()
